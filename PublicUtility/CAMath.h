@@ -1,6 +1,6 @@
 /*
-     File: CAPlayThroughController.h 
- Abstract: CAPlayThough Classes. 
+     File: CAMath.h 
+ Abstract:  Part of CoreAudio Utility Classes  
   Version: 1.2.2 
   
  Disclaimer: IMPORTANT:  This Apple software is supplied to you by Apple 
@@ -44,31 +44,25 @@
  Copyright (C) 2013 Apple Inc. All Rights Reserved. 
   
 */
+#ifndef __CAMath_h__
+#define __CAMath_h__
 
-#import <Cocoa/Cocoa.h>
-#include "CAPlayThrough.h"
-#include "AudioDeviceList.h"
+#if !defined(__COREAUDIO_USE_FLAT_INCLUDES__)
+	#include <CoreAudio/CoreAudioTypes.h>
+#else
+	#include <CoreAudioTypes.h>
+#endif
 
-@interface CAPlayThroughController : NSObject
-{
-	IBOutlet NSPopUpButton *		mInputDevices;
-	IBOutlet NSPopUpButton *		mOutputDevices;
-    IBOutlet NSButton *				mStartButton;
-	IBOutlet NSProgressIndicator *	mProgress;
+inline bool fiszero(Float64 f) { return (f == 0.); }
+inline bool fiszero(Float32 f) { return (f == 0.f); }
 
-	CAPlayThroughHost *				playThroughHost;
-        	
-	AudioDeviceList *				mInputDeviceList;
-	AudioDeviceList	*				mOutputDeviceList;
-	AudioDeviceID					inputDevice;
-	AudioDeviceID					outputDevice;
-}
+inline bool fnonzero(Float64 f) { return !fiszero(f); }
+inline bool fnonzero(Float32 f) { return !fiszero(f); }
 
-- (IBAction)startStop:(id)sender;
-- (IBAction)inputDeviceSelected:(id)sender;
-- (IBAction)outputDeviceSelected:(id)sender;
+inline bool fequal(const Float64 &a, const Float64 &b) { return a == b; }
+inline bool fequal(const Float32 &a, const Float32 &b) { return a == b; }
 
-- (void)start: (id)sender;
-- (void)stop: (id)sender;
-- (void)resetPlayThrough;
-@end
+inline bool fnotequal(const Float64 &a, const Float64 &b) { return !fequal(a, b); }
+inline bool fnotequal(const Float32 &a, const Float32 &b) { return !fequal(a, b); }
+
+#endif // __CAMath_h__

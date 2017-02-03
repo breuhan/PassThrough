@@ -1,43 +1,50 @@
-/*	Copyright © 2007 Apple Inc. All Rights Reserved.
-	
-	Disclaimer: IMPORTANT:  This Apple software is supplied to you by 
-			Apple Inc. ("Apple") in consideration of your agreement to the
-			following terms, and your use, installation, modification or
-			redistribution of this Apple software constitutes acceptance of these
-			terms.  If you do not agree with these terms, please do not use,
-			install, modify or redistribute this Apple software.
-			
-			In consideration of your agreement to abide by the following terms, and
-			subject to these terms, Apple grants you a personal, non-exclusive
-			license, under Apple's copyrights in this original Apple software (the
-			"Apple Software"), to use, reproduce, modify and redistribute the Apple
-			Software, with or without modifications, in source and/or binary forms;
-			provided that if you redistribute the Apple Software in its entirety and
-			without modifications, you must retain this notice and the following
-			text and disclaimers in all such redistributions of the Apple Software. 
-			Neither the name, trademarks, service marks or logos of Apple Inc. 
-			may be used to endorse or promote products derived from the Apple
-			Software without specific prior written permission from Apple.  Except
-			as expressly stated in this notice, no other rights or licenses, express
-			or implied, are granted by Apple herein, including but not limited to
-			any patent rights that may be infringed by your derivative works or by
-			other works in which the Apple Software may be incorporated.
-			
-			The Apple Software is provided by Apple on an "AS IS" basis.  APPLE
-			MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION
-			THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS
-			FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND
-			OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS.
-			
-			IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL
-			OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-			SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-			INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION,
-			MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED
-			AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE),
-			STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE
-			POSSIBILITY OF SUCH DAMAGE.
-*/
+/*
+     File: CAPlayThrough.cpp 
+ Abstract: CAPlayThough Classes. 
+  Version: 1.2.2 
+  
+ Disclaimer: IMPORTANT:  This Apple software is supplied to you by Apple 
+ Inc. ("Apple") in consideration of your agreement to the following 
+ terms, and your use, installation, modification or redistribution of 
+ this Apple software constitutes acceptance of these terms.  If you do 
+ not agree with these terms, please do not use, install, modify or 
+ redistribute this Apple software. 
+  
+ In consideration of your agreement to abide by the following terms, and 
+ subject to these terms, Apple grants you a personal, non-exclusive 
+ license, under Apple's copyrights in this original Apple software (the 
+ "Apple Software"), to use, reproduce, modify and redistribute the Apple 
+ Software, with or without modifications, in source and/or binary forms; 
+ provided that if you redistribute the Apple Software in its entirety and 
+ without modifications, you must retain this notice and the following 
+ text and disclaimers in all such redistributions of the Apple Software. 
+ Neither the name, trademarks, service marks or logos of Apple Inc. may 
+ be used to endorse or promote products derived from the Apple Software 
+ without specific prior written permission from Apple.  Except as 
+ expressly stated in this notice, no other rights or licenses, express or 
+ implied, are granted by Apple herein, including but not limited to any 
+ patent rights that may be infringed by your derivative works or by other 
+ works in which the Apple Software may be incorporated. 
+  
+ The Apple Software is provided by Apple on an "AS IS" basis.  APPLE 
+ MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION 
+ THE IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS 
+ FOR A PARTICULAR PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND 
+ OPERATION ALONE OR IN COMBINATION WITH YOUR PRODUCTS. 
+  
+ IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL 
+ OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+ SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
+ INTERRUPTION) ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, 
+ MODIFICATION AND/OR DISTRIBUTION OF THE APPLE SOFTWARE, HOWEVER CAUSED 
+ AND WHETHER UNDER THEORY OF CONTRACT, TORT (INCLUDING NEGLIGENCE), 
+ STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE 
+ POSSIBILITY OF SUCH DAMAGE. 
+  
+ Copyright (C) 2013 Apple Inc. All Rights Reserved. 
+  
+*/ 
+
 #include "CAPlayThrough.h"
 
 #pragma mark -- CAPlayThrough
@@ -116,7 +123,7 @@ mFirstOutputTime(-1),
 mInToOutSampleOffset(0)
 {
 	OSStatus err = noErr;
-	err =Init(input,output);
+	err = Init(input,output);
     if(err) {
 		fprintf(stderr,"CAPlayThrough ERROR: Cannot Init CAPlayThrough");
 		exit(1);
@@ -178,6 +185,7 @@ void CAPlayThrough::Cleanup()
 	AudioUnitUninitialize(mInputUnit);
 	AUGraphClose(mGraph);
 	DisposeAUGraph(mGraph);
+    AudioComponentInstanceDispose(mInputUnit);
 }
 
 #pragma mark --- Operation---
@@ -206,7 +214,11 @@ OSStatus CAPlayThrough::Stop()
 	if(IsRunning()){
 		//Stop the AUHAL
 		err = AudioOutputUnitStop(mInputUnit);
+        checkErr(err);
+        
 		err = AUGraphStop(mGraph);
+        checkErr(err);
+        
 		mFirstInputTime = -1;
 		mFirstOutputTime = -1;
 	}
@@ -217,7 +229,7 @@ Boolean CAPlayThrough::IsRunning()
 {	
 	OSStatus err = noErr;
 	UInt32 auhalRunning = 0, size = 0;
-	Boolean graphRunning;
+	Boolean graphRunning = false;
 	size = sizeof(auhalRunning);
 	if(mInputUnit)
 	{
@@ -227,11 +239,14 @@ Boolean CAPlayThrough::IsRunning()
 								0, // input element
 								&auhalRunning,
 								&size);
+        checkErr(err);
 	}
 	
-	if(mGraph)
+	if(mGraph) {
 		err = AUGraphIsRunning(mGraph,&graphRunning);
-	
+        checkErr(err);
+    }
+    
 	return (auhalRunning || graphRunning);	
 }
 
@@ -240,15 +255,21 @@ OSStatus CAPlayThrough::SetOutputDeviceAsCurrent(AudioDeviceID out)
 {
     UInt32 size = sizeof(AudioDeviceID);;
     OSStatus err = noErr;
+    
+//        UInt32 propsize = sizeof(Float32);
+    
+    //AudioObjectPropertyScope theScope = mIsInput ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput;
+    
+    AudioObjectPropertyAddress theAddress = { kAudioHardwarePropertyDefaultOutputDevice,
+                                              kAudioObjectPropertyScopeGlobal,
+                                              kAudioObjectPropertyElementMaster };
 	
 	if(out == kAudioDeviceUnknown) //Retrieve the default output device
 	{
-		err = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultOutputDevice,
-									   &size,  
-									   &out);
+		err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &theAddress, 0, NULL, &size, &out);
+        checkErr(err);
 	}
 	mOutputDevice.Init(out, false);
-	checkErr(err);
 	
 	//Set the Current Device to the Default Output Unit.
     err = AudioUnitSetProperty(mOutputUnit,
@@ -265,15 +286,16 @@ OSStatus CAPlayThrough::SetInputDeviceAsCurrent(AudioDeviceID in)
 {
     UInt32 size = sizeof(AudioDeviceID);
     OSStatus err = noErr;
+    
+    AudioObjectPropertyAddress theAddress = { kAudioHardwarePropertyDefaultInputDevice,
+                                              kAudioObjectPropertyScopeGlobal,
+                                              kAudioObjectPropertyElementMaster };
 	
 	if(in == kAudioDeviceUnknown) //get the default input device if device is unknown
 	{  
-		err = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice,
-									   &size,  
-									   &in);
+		err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &theAddress, 0, NULL, &size, &in);
 		checkErr(err);
 	}
-	
 	mInputDevice.Init(in, true);
 	
 	//Set the Current Device to the AUHAL.
@@ -377,9 +399,9 @@ OSStatus CAPlayThrough::MakeGraph()
 OSStatus CAPlayThrough::SetupAUHAL(AudioDeviceID in)
 {
 	OSStatus err = noErr;
-	
-	Component comp;
-	ComponentDescription desc;
+    
+    AudioComponent comp;
+    AudioComponentDescription desc;
 	
 	//There are several different types of Audio Units.
 	//Some audio units serve as Outputs, Mixers, or DSP
@@ -397,12 +419,13 @@ OSStatus CAPlayThrough::SetupAUHAL(AudioDeviceID in)
 	desc.componentFlagsMask = 0;
 	
 	//Finds a component that meets the desc spec's
-	comp = FindNextComponent(NULL, &desc);
+    comp = AudioComponentFindNext(NULL, &desc);
 	if (comp == NULL) exit (-1);
 	
 	//gains access to the services provided by the component
-	OpenAComponent(comp, &mInputUnit);  
-
+    err = AudioComponentInstanceNew(comp, &mInputUnit);
+    checkErr(err);
+    
 	//AUHAL needs to be initialized before anything is done to it
 	err = AudioUnitInitialize(mInputUnit);
 	checkErr(err);
@@ -486,24 +509,28 @@ OSStatus CAPlayThrough::SetupBuffers()
 	//Get the size of the IO buffer(s)
 	UInt32 propertySize = sizeof(bufferSizeFrames);
 	err = AudioUnitGetProperty(mInputUnit, kAudioDevicePropertyBufferFrameSize, kAudioUnitScope_Global, 0, &bufferSizeFrames, &propertySize);
-	bufferSizeBytes = bufferSizeFrames * sizeof(Float32);
+	checkErr(err);
+    bufferSizeBytes = bufferSizeFrames * sizeof(Float32);
 		
 	//Get the Stream Format (Output client side)
 	propertySize = sizeof(asbd_dev1_in);
 	err = AudioUnitGetProperty(mInputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 1, &asbd_dev1_in, &propertySize);
-	//printf("=====Input DEVICE stream format\n" );	
+	checkErr(err);
+    //printf("=====Input DEVICE stream format\n" );	
 	//asbd_dev1_in.Print();
 	
 	//Get the Stream Format (client side)
 	propertySize = sizeof(asbd);
 	err = AudioUnitGetProperty(mInputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &asbd, &propertySize);		
-	//printf("=====current Input (Client) stream format\n");	
+	checkErr(err);
+    //printf("=====current Input (Client) stream format\n");	
 	//asbd.Print();	
 
 	//Get the Stream Format (Output client side)
 	propertySize = sizeof(asbd_dev2_out);
 	err = AudioUnitGetProperty(mOutputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &asbd_dev2_out, &propertySize);
-	//printf("=====Output (Device) stream format\n");	
+	checkErr(err);
+    //printf("=====Output (Device) stream format\n");	
 	//asbd_dev2_out.Print();
 	
 	//////////////////////////////////////
@@ -518,8 +545,14 @@ OSStatus CAPlayThrough::SetupBuffers()
 	
 	// We must get the sample rate of the input device and set it to the stream format of AUHAL
 	propertySize = sizeof(Float64);
-	AudioDeviceGetProperty(mInputDevice.mID, 0, 1, kAudioDevicePropertyNominalSampleRate, &propertySize, &rate);
-	asbd.mSampleRate =rate;
+    AudioObjectPropertyAddress theAddress = { kAudioDevicePropertyNominalSampleRate,
+                                              kAudioObjectPropertyScopeGlobal,
+                                              kAudioObjectPropertyElementMaster };
+                                              
+    err = AudioObjectGetPropertyData(mInputDevice.mID, &theAddress, 0, NULL, &propertySize, &rate);
+	checkErr(err);
+    
+    asbd.mSampleRate =rate;
 	propertySize = sizeof(asbd);
 	
 	//Set the new formats to the AUs...
@@ -530,10 +563,14 @@ OSStatus CAPlayThrough::SetupBuffers()
 	
 	//Set the correct sample rate for the output device, but keep the channel count the same
 	propertySize = sizeof(Float64);
-	AudioDeviceGetProperty(mOutputDevice.mID, 0, 0, kAudioDevicePropertyNominalSampleRate, &propertySize, &rate);
-	asbd.mSampleRate =rate;
+    
+    err = AudioObjectGetPropertyData(mOutputDevice.mID, &theAddress, 0, NULL, &propertySize, &rate);
+    checkErr(err);
+	
+    asbd.mSampleRate =rate;
 	propertySize = sizeof(asbd);
-	//Set the new audio stream formats for the rest of the AUs...
+	
+    //Set the new audio stream formats for the rest of the AUs...
 	err = AudioUnitSetProperty(mVarispeedUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &asbd, propertySize);
 	checkErr(err);	
 	err = AudioUnitSetProperty(mOutputUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, propertySize);
@@ -591,9 +628,10 @@ OSStatus CAPlayThrough::InputProc(void *inRefCon,
 						 This->mInputBuffer);// Audio Buffer List to hold data
 	checkErr(err);
 		
-	if(!err)
+	if(!err) {
 		err = This->mBuffer->Store(This->mInputBuffer, Float64(inNumberFrames), SInt64(inTimeStamp->mSampleTime));
-	
+	}	
+
 	return err;
 }
 
@@ -654,7 +692,7 @@ OSStatus CAPlayThrough::OutputProc(void *inRefCon,
 	}
 
 	//copy the data from the buffers	
-	err = This->mBuffer->Fetch(ioData, inNumberFrames, SInt64(TimeStamp->mSampleTime - This->mInToOutSampleOffset), false);	
+	err = This->mBuffer->Fetch(ioData, inNumberFrames, SInt64(TimeStamp->mSampleTime - This->mInToOutSampleOffset));	
 	if(err != kCARingBufferError_OK)
 	{
 		MakeBufferSilent (ioData);
@@ -668,15 +706,16 @@ OSStatus CAPlayThrough::OutputProc(void *inRefCon,
 
 #pragma mark -- Listeners --
 
-OSStatus CAPlayThroughHost::StreamListener( AudioStreamID         inStream,
-											UInt32                  inChannel,
-											AudioDevicePropertyID   inPropertyID,
-											void*                   inClientData)
+// this sample now uses AudioObjectAddPropertyListenerBlock instead of AudioObjectAddPropertyListener 
+/*OSStatus CAPlayThroughHost::StreamListener(AudioObjectID inObjectID,
+                                           UInt32 inNumberAddresses,
+                                           const AudioObjectPropertyAddress inAddresses[],
+                                           void* inClientData)
 {	
 	CAPlayThroughHost *This = (CAPlayThroughHost *)inClientData;
 	This->ResetPlayThrough();	
 	return noErr;		
-}
+}*/
 
 #pragma mark -									
 #pragma mark -- CAPlayThroughHost Methods --
@@ -695,6 +734,8 @@ CAPlayThroughHost::~CAPlayThroughHost()
 void CAPlayThroughHost::CreatePlayThrough(AudioDeviceID input, AudioDeviceID output)
 {
 	mPlayThrough = new CAPlayThrough(input, output);
+    StreamListenerQueue = dispatch_queue_create("com.CAPlayThough.StreamListenerQueue", DISPATCH_QUEUE_SERIAL);
+    //if (StreamListenerQueue) dispatch_set_context(StreamListenerQueue, this);
 	AddDeviceListeners(input);
 }
 
@@ -704,6 +745,8 @@ void CAPlayThroughHost::DeletePlayThrough()
 	{
 		mPlayThrough->Stop();
 		RemoveDeviceListeners(mPlayThrough->GetInputDeviceID());
+        dispatch_release(StreamListenerQueue);
+        StreamListenerQueue = NULL;
 		delete mPlayThrough;
 		mPlayThrough = NULL;
 	}
@@ -745,48 +788,96 @@ Boolean		CAPlayThroughHost::IsRunning()
 
 void CAPlayThroughHost::AddDeviceListeners(AudioDeviceID input)
 {
-		// StreamListener is called whenever the sample rate changes (as well as other format characteristics of the device)
+    // creating the block here allows us access to the this pointer so we can call Reset when required
+    AudioObjectPropertyListenerBlock listenerBlock = ^(UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[]) {
+
+        ResetPlayThrough();
+        
+    };
+    
+    // need to retain the listener block so that we can remove it later
+    StreamListenerBlock = Block_copy(listenerBlock);
+    
+    AudioObjectPropertyAddress theAddress = { kAudioDevicePropertyStreams,
+                                              kAudioDevicePropertyScopeInput,
+                                              kAudioObjectPropertyElementMaster };
+    
+    // StreamListenerBlock is called whenever the sample rate changes (as well as other format characteristics of the device)
 	UInt32 propSize;
-	OSStatus err = AudioDeviceGetPropertyInfo(input, 0, true, kAudioDevicePropertyStreams, &propSize, NULL);
-	if(!err)
-	{
+	OSStatus err = AudioObjectGetPropertyDataSize(input, &theAddress, 0, NULL, &propSize);
+    if (err) fprintf(stderr, "Error %ld returned from AudioObjectGetPropertyDataSize\n", (long)err);
+    
+	if(!err) {
+    
 		AudioStreamID *streams = (AudioStreamID*)malloc(propSize);	
-		err = AudioDeviceGetProperty(input, 0, true, kAudioDevicePropertyStreams, &propSize, streams);
-		
-		if(!err)
-		{
+		err = AudioObjectGetPropertyData(input, &theAddress, 0, NULL, &propSize, streams);
+        if (err) fprintf(stderr, "Error %ld returned from AudioObjectGetPropertyData\n", (long)err);
+        		
+		if(!err) {
 			UInt32 numStreams = propSize / sizeof(AudioStreamID);
-			for(UInt32 i=0; i < numStreams; i++)
-			{
+			
+            for(UInt32 i=0; i < numStreams; i++) {
 				UInt32 isInput;
 				propSize = sizeof(UInt32);
-				err = AudioStreamGetProperty(streams[i], 0, kAudioStreamPropertyDirection, &propSize, &isInput);
-				if(!err && isInput)
-					err = AudioStreamAddPropertyListener(streams[i], 0, kAudioStreamPropertyPhysicalFormat, StreamListener, this);
-			}
-		}
-	}
+                theAddress.mSelector = kAudioStreamPropertyDirection;
+                theAddress.mScope = kAudioObjectPropertyScopeGlobal;
+				
+                err = AudioObjectGetPropertyData(streams[i], &theAddress, 0, NULL, &propSize, &isInput);
+                if (err) fprintf(stderr, "Error %ld returned from AudioObjectGetPropertyData\n", (long)err);
+
+                if(!err && isInput) {
+                    theAddress.mSelector = kAudioStreamPropertyPhysicalFormat;
+                    
+                    err = AudioObjectAddPropertyListenerBlock(streams[i], &theAddress, StreamListenerQueue, StreamListenerBlock);
+					//err = AudioObjectAddPropertyListener(streams[i], &theAddress, StreamListener, this);
+                    if (err) fprintf(stderr, "Error %ld returned from AudioObjectAddPropertyListenerBlock\n", (long)err);	
+                }
+            }
+        }
+        
+        if (NULL != streams) free(streams);
+    }
 }
 
 void CAPlayThroughHost::RemoveDeviceListeners(AudioDeviceID input)
 {
+    AudioObjectPropertyAddress theAddress = { kAudioDevicePropertyStreams,
+                                              kAudioDevicePropertyScopeInput,
+                                              kAudioObjectPropertyElementMaster };
+                                              
 	UInt32 propSize;
-	OSStatus err = AudioDeviceGetPropertyInfo(input, 0, true, kAudioDevicePropertyStreams, &propSize, NULL);
-	if(!err)
-	{
-		AudioStreamID *streams = (AudioStreamID*)malloc(propSize);	
-		err = AudioDeviceGetProperty(input, 0, true, kAudioDevicePropertyStreams, &propSize, streams);
-		if(!err)
-		{
+    OSStatus err = AudioObjectGetPropertyDataSize(input, &theAddress, 0, NULL, &propSize);
+    if (err) fprintf(stderr, "Error %ld returned from AudioObjectGetPropertyDataSize\n", (long)err);
+
+	if(!err) {
+    
+		AudioStreamID *streams = (AudioStreamID*)malloc(propSize);
+        err = AudioObjectGetPropertyData(input, &theAddress, 0, NULL, &propSize, streams);
+        if (err) fprintf(stderr, "Error %ld returned from AudioObjectGetPropertyData\n", (long)err);
+        		
+        if(!err) {
 			UInt32 numStreams = propSize / sizeof(AudioStreamID);
-			for(UInt32 i=0; i < numStreams; i++)
-			{
+			
+            for(UInt32 i=0; i < numStreams; i++) {
 				UInt32 isInput;
 				propSize = sizeof(UInt32);
-				err = AudioStreamGetProperty(streams[i], 0, kAudioStreamPropertyDirection, &propSize, &isInput);
-				if(!err && isInput)
-					err = AudioStreamRemovePropertyListener(streams[i], 0, kAudioStreamPropertyPhysicalFormat, StreamListener);
+                theAddress.mSelector = kAudioStreamPropertyDirection;
+                theAddress.mScope = kAudioObjectPropertyScopeGlobal;
+                
+                err = AudioObjectGetPropertyData(streams[i], &theAddress, 0, NULL, &propSize, &isInput);
+                if (err) fprintf(stderr, "Error %ld returned from AudioObjectGetPropertyData\n", (long)err);
+
+				if(!err && isInput) {
+                    theAddress.mSelector = kAudioStreamPropertyPhysicalFormat;
+                    
+                    err = AudioObjectRemovePropertyListenerBlock(streams[i], &theAddress, StreamListenerQueue, StreamListenerBlock);
+                    //err = AudioObjectRemovePropertyListener(streams[i], &theAddress, StreamListener, this);
+                    if (err) fprintf(stderr, "Error %ld returned from AudioObjectRemovePropertyListenerBlock\n", (long)err);
+                    Block_release(StreamListenerBlock);
+                }
 			}
 		}
+        
+        if (NULL != streams) free(streams);
 	}
 }
